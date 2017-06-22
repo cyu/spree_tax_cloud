@@ -37,7 +37,8 @@ module Spree
         address2: address.address2,
         city:     address.city,
         state:    address.try(:state).try(:abbr),
-        zip5:     address.zipcode.try(:[], 0...5)
+        zip5:     address.zipcode.try(:[], 0...5),
+        zip4:     address.zipcode.try(:split, '-').try(:[], 1)
       )
     end
 
