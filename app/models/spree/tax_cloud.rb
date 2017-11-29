@@ -21,11 +21,21 @@ module Spree
         destination: address_from_spree_address(order.ship_address || order.bill_address)
       )
 
+      promo_total = -order.adjustments.eligible.promotion.sum(:amount)
+
       index = -1 # array is zero-indexed
       # Prepare line_items for lookup
-      order.line_items.each { |line_item| transaction.cart_items << cart_item_from_item(line_item, index += 1) }
+      order.line_items.each do |line_item|
+        item_promo_total = [line_item.quantity * line_item.price, promo_total].min
+        promo_total -= item_promo_total
+        transaction.cart_items << cart_item_from_item(line_item, index += 1, item_promo_total)
+      end
       # Prepare shipments for lookup
-      order.shipments.each { |shipment| transaction.cart_items << cart_item_from_item(shipment, index += 1) }
+      order.shipments.each do |shipment|
+        item_promo_total = [shipment.cost, promo_total].min
+        promo_total -= item_promo_total
+        transaction.cart_items << cart_item_from_item(shipment, index += 1, item_promo_total)
+      end
       transaction
     end
 
@@ -42,14 +52,21 @@ module Spree
       )
     end
 
-    def self.cart_item_from_item(item, index)
+    def self.cart_item_from_item(item, index, discount_total = 0)
       case item
       when Spree::LineItem
+        if item.promo_total != 0
+          discount_total = -item.promo_total
+        end
+        per_item_discount = 0
+        if item.quantity > 0 && discount_total > 0
+          per_item_discount = discount_total / item.quantity
+        end
         ::TaxCloud::CartItem.new(
           index:    index,
           item_id:  item.try(:variant).try(:sku).present? ? item.try(:variant).try(:sku) : "LineItem #{item.id}",
           tic:      (item.product.tax_cloud_tic || Spree::Config.taxcloud_default_product_tic),
-          price:    item.quantity == 0 ? item.price : (item.promo_total / item.quantity) + item.price,
+          price:    item.price - per_item_discount,
           quantity: item.quantity
         )
       when Spree::Shipment
@@ -57,7 +74,7 @@ module Spree
           index:    index,
           item_id:  "Shipment #{item.number}",
           tic:      Spree::Config.taxcloud_shipping_tic,
-          price:    item.cost,
+          price:    item.cost - discount_total,
           quantity: 1
         )
       else
