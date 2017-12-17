@@ -6,5 +6,8 @@ Spree::LineItem.class_eval do
     elsif order.bill_address
       key << "billed_to<#{order.bill_address.try(:cache_key)}>"
     end
+    if (order_promo = order.adjustments.eligible.promotion.sum(:amount).abs) > 0
+      key << "order_promo<#{order_promo}>"
+    end
   end
 end
