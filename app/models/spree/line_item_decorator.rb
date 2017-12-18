@@ -9,5 +9,6 @@ Spree::LineItem.class_eval do
     if (order_promo = order.adjustments.eligible.promotion.sum(:amount).abs) > 0
       key << "order_promo<#{order_promo}>"
     end
+    key
   end
 end
